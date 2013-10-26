@@ -24,6 +24,87 @@ function kill(id)
     game.objects[id] = nil
 end
 
+-----------------------------------------------------------------------------------------
+--- Inventory ---------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
+
+inventory = {
+    list = {},
+    open_state = {},
+    item = Class{
+        init = function(self,name,callback)
+            self.name = name
+            self.callback = callback
+        end,
+        use = function(self,on)
+            self.callback(self,on)
+        end
+    },
+    add = function()
+        table.insert(inventory.list, inventory.item("health potion +10", use_health_potion))
+    end,
+    remove = function(index)
+        table.remove(inventory.list, index)
+    end
+}
+
+function use_health_potion(item, used_on)
+    used_on.health = used_on.health + 10
+end
+
+function inventory.open_state:enter()
+    self.selected = 1
+end
+
+function inventory.open_state:keypressed()
+    if love.keyboard.isDown("up") then
+        self.selected = (self.selected - 1) % table.maxn(inventory.list) + 1
+    end
+    if love.keyboard.isDown("down") then
+        self.selected = (self.selected + 1) % table.maxn(inventory.list) + 1
+    end
+    if love.keyboard.isDown("return") and table.maxn(inventory.list)  > 0 then
+        local player = {}
+		for i, p in pairs(collide.list["player"]) do
+            player = p
+        end
+        inventory.list[self.selected]:use(player)
+        inventory.remove(self.selected)
+    end
+    if love.keyboard.isDown("escape") then
+        GameState.switch(game)
+    end
+end
+
+function inventory.open_state:draw()
+    local x = 3
+    local y = 3
+    local i = 1
+    print(self.selected)
+    f:clear()
+    f:write("Inventory: ",2,2)
+    for id, item in ipairs(inventory.list) do
+        --if id == self.selected then
+        --    f:write(item.name,x,y+i,ROT.Color:fromString('black'),ROT.Color:fromString('white'))
+        --else
+            f:write(item.name,x,y+i)
+        --end
+        i = i + 1
+    end
+    f:draw()
+end
+
+--- How do index the inventory?
+
+--- Game state
+--- - Init
+--- - - Pass in inventory list (Global, instead?)
+--- - Update
+--- - - Handle menu navi
+--- - - handle selections
+--- - Draw
+--- - - Draw menu screen with list of inventory
+
 ------------------------------------------------------------------------------------------
 --- Singletons ---------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------
@@ -204,6 +285,7 @@ Player = Class{
         self.walk = 1
         self.jump = 5
 		collide.register("player",self)
+        inventory.add()
         self.message = "Welcome to hell!"
 		hud.registerDisplay(self, "name", "Name: %p", 1, 23)
 		hud.registerDisplay(self, "health", "Health: %p", 30, 23)
@@ -228,7 +310,7 @@ Player = Class{
         if love.keyboard.isDown("down") then
 			Player.move(self,0,self.speed)
         end
-        if love.keyboard.isDown("f") then
+        if love.keyboard.isDown("f") and self.power >= 30 then
 			GameState.switch(target_mode, self, function(c)
                 collide.check(c.x,c.y,self,"enemy",function(self,other)
                     other:damage(5)
@@ -236,10 +318,15 @@ Player = Class{
                 self.power = self.power - 30
             end)
         end
+        if love.keyboard.isDown("i") then
+			GameState.switch(inventory.open_state, self)
+        end
 		collide.check(self.x,self.y,self,"enemy",function(self,other)
-            other.health = other.health - 1
-            self.power = self.power - 10
-			self.moveBack(self)
+            if self.power >= 10 then
+                other.health = other.health - 1
+                self.power = self.power - 10
+                self.moveBack(self)
+            end
 		end)
 		if self.power < 100 then
 			math.min(self.power + 3, 100)
@@ -355,6 +442,10 @@ function love.load()
     f = ROT.Display()
     spawn(Player,10,10)
     spawn(Goblin,30,12)
+    spawn(Goblin,30,12)
+    spawn(Goblin,20,12)
+    spawn(Goblin,30,22)
+    spawn(Goblin,40,12)
     GameState.registerEvents()
     GameState.switch(game)
 end
